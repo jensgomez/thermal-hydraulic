@@ -3,7 +3,7 @@ program thermo
 
     use mod_thermo
     use mod_fuel
-    use mod_fluid
+    use mod_coolant
 
     implicit none
 
@@ -36,7 +36,7 @@ program thermo
 
     mdot = 1.025E+08 * 0.90D+0
     tin = 537.0D+0
-    pin = 2250.0D+0
+    pin = 1050.0D+0
     h(1:lstep) = 0.0D+0
 
     nassemb = 764
@@ -45,7 +45,7 @@ program thermo
 
     call fuelshape ( option, l, pow, peak, a, lstep, nrods, qp )
 
-    call enth_rise ( mdot, qp, tin, pin, nrods, l, lstep, nassemb, nshape, h )
+    call coolant ( mdot, qp, tin, pin, nrods, l, lstep, nassemb, nshape )
 
 
 

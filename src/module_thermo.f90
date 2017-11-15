@@ -6,105 +6,6 @@ module mod_thermo
     contains
 
 
-    subroutine liquid ( p, t, rho, h, cp )
-
-! -------------------------------------------------------------------------- 80
-!
-!   This subroutine calculates the thermodynamic properties for liquid water
-!   for a given pressure and temperature
-!
-!
-!   p,   input, real ( kind = 8 ), the pressure of the fluid,
-!                                  units: psia
-!
-!
-!   t,   input, real ( kind = 8 ), the temperature of the fluid,
-!                                  units: deg F
-!
-!
-!   rho, input, real ( kind = 8 ), the density of the fluid,
-!                                  units: ft**3/lbm
-!
-!
-!   h,   input, real ( kind = 8 ), the enthalpy of the fluid,
-!                                  units: BTU/lb
-!
-!
-!   cp,  input, real ( kind = 8 ), the specific heat of the fluid,
-!                                  units: FTU/(lb-R)
-!
-!
-
-        implicit none
-
-        real ( kind = 8 ), intent ( in )    :: p
-        real ( kind = 8 ), intent ( in )    :: t
-        real ( kind = 8 ), intent ( inout ) :: rho
-        real ( kind = 8 ), intent ( inout ) :: h
-        real ( kind = 8 ), intent ( inout ) :: cp
-
-!
-!       These are the metric conversions of the input variables
-        real ( kind = 8 ) :: p_mpa
-        real ( kind = 8 ) :: t_c
-
-
-!
-!       Parameters required for psat subroutine
-        real ( kind = 8 ) :: psat
-
-
-        p_mpa = p * 0.00689476D+0
-
-        t_c = (5.0D+0/9.0D+0)*(t - 32.0D+0)
-
-
-!       Call the psat subroutine to calculate the saturation pressure
-        call p_sat ( t, psat )
-
-
-!       Call the liq_dens subroutine to calculate the density
-        call liq_dens ( psat, p, t, rho )
-
-
-!       Call the liq_enth subroutine to calculate the enthalpy
-        call liq_enth ( psat, p, t, h )
-
-
-!       Call the liq_cp subroutine to calculate the specific heat
-        call liq_cp ( psat, p, t, cp )
-
-
-
-!       Open file stream
-        open ( unit = 10, file = "liquid.out", status = "replace" )
-
-        write ( 10 , '(a)' ) 'THE LIQUID THERMODYNAMIC SUBROUTINE IS CALLED '
-        write ( 10 , '(a)' ) 'THE ECHO FOR THE INPUT ARGUMENTS IS PRESENTED BELOW '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT PRESSURE IS    = ', p       , ' PSIA '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT PRESSURE IS    = ', p_mpa   , ' MPA '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT TEMPERATURE IS = ', t       , ' DEG F '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT TEMPERATURE IS = ', t_c     , ' DEG C '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a)' ) 'THE CALCULATED PARAMETERS ARE PRESENTED BELOW '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED SATURATION PRESSUE = ', psat, ' PSIA '
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED DENSITY            = ', rho,  ' LBM/FT**3 '
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED ENTHALPY           = ', h,    ' BTU/LBM'
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED SPECIFIC HEAT      = ', cp,   ' BTU/(LBM-DEG F) '
-        write ( 10 , '(a)' ) '   '
-
-
-
-
-!       Close the file stream
-        close ( 10 )
-
-    end subroutine liquid
-
-
     subroutine p_sat ( t, psat )
 
 ! -------------------------------------------------------------------------- 80
@@ -135,79 +36,48 @@ module mod_thermo
 !       Convert temperature from deg F to deg C
         tc = (5.0D+0/9.0D+0)*(t - 32.0D+0)
 
-!       Open file stream
-        open ( unit = 10, file = "psat.out", status = "replace" )
-
-        write ( 10, '(a)' ) 'THE SATURATION PRESSURE SUBROUTINE IS CALLED '
-        write ( 10, '(a)' ) 'THE ECHO FOR THE INPUT ARGUMENTS IS PRESENTED BELOW '
-        write ( 10, '(a)' ) '   '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT TEMPERATURE IS = ', t       , ' DEG F '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT TEMPERATURE IS = ', tc      , ' DEG C '
-        write ( 10, '(a)' ) '   '
-
         if ( tc < 89.965D+0 .or. tc > 373.253) then
 
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS LOWER OR HIGHER THAN THE DOMAIN  '
-            write ( 10, '(a)' ) 'CAN NOT CONTINUE FURTHER. EXITING. '
+            write ( *, * ) ' THE PRESSURE USED IS OUTSIDE THE DOMAIN '
+            write ( *, * ) ' THE SUBROUTINE IS EXITING '
 
 
         else if ( tc >= 89.965D+0 .and. tc < 139.781D+0 ) then
 
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS BETWEEN 89.965 DEG C AND 139.781 DEGC '
-            write ( 10, '(a)' ) 'USING THE RESPECTIVE CORRELATION '
 
             psat_mpa = ((tc+57.0D+0)/236.2315D+0)**5.602972D+0
 
 
         else if ( tc >= 139.781D+0 .and. tc < 203.662D+0 ) then
 
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS BETWEEN 139.781 DEG C AND 203.662 DEG C '
-            write ( 10, '(a)' ) 'USING THE RESPECTIVE CORRELATION '
-
             psat_mpa = ((tc+28.0D+0)/207.9248D+0)**4.778504D+0
 
 
         else if ( tc >= 203.662D+0 .and. tc < 299.407D+0 ) then
 
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS BETWEEN 203.662 DEG C AND 299.407 DEG C '
-            write ( 10, '(a)' ) 'USING THE RESPECTIVE CORRELATION '
-
-            psat_mpa = ((tc+5.0D+0)/185.0779D+0)**4.304376D+0
-
-        else if ( tc >= 299.407D+0 .and. tc < 355.636D+0 ) then
-
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS BETWEEN 299.407 DEG C AND 355.636 DEG C '
-            write ( 10, '(a)' ) 'USING THE RESPECTIVE CORRELATION '
-
             psat_mpa = ((tc+5.0D+0)/185.0779D+0)**4.304376D+0
 
 
         else if ( tc >= 299.407D+0 .and. tc < 355.636D+0 ) then
 
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS BETWEEN 299.407 DEG C AND 355.636 DEG C '
-            write ( 10, '(a)' ) 'USING THE RESPECTIVE CORRELATION '
+            psat_mpa = ((tc+5.0D+0)/185.0779D+0)**4.304376D+0
+
+
+        else if ( tc >= 299.407D+0 .and. tc < 355.636D+0 ) then
 
             psat_mpa = ((tc+16.0D+0)/195.1819D+0)**4.460843D+0
 
 
         else if ( tc >= 355.563D+0 .and. tc <= 373.253D+0 ) then
 
-            write ( 10, '(a)' ) 'THE TEMPERATURE IS BETWEEN 355.563 DEG C AND 373.253 DEG C '
-            write ( 10, '(a)' ) 'USING THE RESPECTIVE CORRELATION '
-
             psat_mpa = ((tc+50.0D+0)/227.2963D+0)**4.960785D+0
+
 
         end if
 
 
 !       Convert from MPa to psia
         psat = psat_mpa * 145.038D+0
-
-        write ( 10, '(a)' ) '   '
-        write ( 10, '(a, g14.6, a)' ) 'THE SATURATION PRESSURE IS CALCULATED TO BE = ', psat , ' PSIA '
-
-
-        close ( 10 )
 
 
     end subroutine p_sat
@@ -382,14 +252,6 @@ module mod_thermo
 
 !       Density equation from Section 4.1
         rho_si = rho_t + ((170.0D+0/(375.0D+0 - t_si)) - 0.20D+0)*( p_si - psat_si )
-
-        write ( *, * ) 'P = ', psat
-        write ( *, * ) 'PSAT  = ', psat_si
-        write ( *, * ) 'RHOt = ', rho_t
-        write ( *, * ) 'RHS  = ', ((170.0D+0/(375.0D+0 - t_si)) - 0.20D+0)*( p_si - psat_si )
-        write ( *, * ) 'RHO = ', rho_si
-
-
 
 !       Convert from kg/m**3 to lb/ft**3
         rho = rho_si * 0.062428D+0
@@ -608,102 +470,6 @@ module mod_thermo
 
     end subroutine liq_cp
 
-
-
-
-    subroutine vapor ( p, t, rho, h, cp )
-
-! -------------------------------------------------------------------------- 80
-!
-!   This subroutine calculates the thermodynamic properties for vapor water
-!   for a given pressure and temperature
-!
-!
-!   p,   input, real ( kind = 8 ), the pressure of the vapor,
-!                                  units: psia
-!
-!
-!   t,   input, real ( kind = 8 ), the temperature of the vapor,
-!                                  units: deg F
-!
-!
-!   rho, input, real ( kind = 8 ), the density of the vapor,
-!                                  units: ft**3/lbm
-!
-!
-!   h,   input, real ( kind = 8 ), the enthalpy of the vapor,
-!                                  units: BTU/lb
-!
-!
-!   cp,  input, real ( kind = 8 ), the specific heat of the vapor,
-!                                  units: FTU/(lb-R)
-!
-!
-
-        implicit none
-
-        real ( kind = 8 ), intent ( in )    :: p
-        real ( kind = 8 ), intent ( in )    :: t
-        real ( kind = 8 ), intent ( inout ) :: rho
-        real ( kind = 8 ), intent ( inout ) :: h
-        real ( kind = 8 ), intent ( inout ) :: cp
-
-!
-!       These are the metric conversions of the input variables
-        real ( kind = 8 ) :: v
-        real ( kind = 8 ) :: p_mpa
-        real ( kind = 8 ) :: t_c
-
-
-!
-!       Parameters required for psat subroutine
-        real ( kind = 8 ) :: tsat
-
-
-        p_mpa = p * 0.00689476D+0
-
-        t_c = (5.0D+0/9.0D+0)*(t - 32.0D+0)
-
-
-!       Call the psat subroutine to calculate the saturation pressure
-        call t_sat ( p, tsat )
-
-
-!       Call the vap_vol subroutine to calculate the density
-        call vap_vol ( p, tsat, t, v , rho )
-
-
-!       Call the vap_enth subroutine to calculate the enthalpy
-        call vap_enth ( p, tsat, t, h )
-
-
-!       Call the vap_cp subroutine to calculate the specific heat
-!
-
-
-
-!       Open file stream
-        open ( unit = 10, file = "vapor.out", status = "replace" )
-
-        write ( 10 , '(a)' ) 'THE VAPOR THERMODYNAMIC SUBROUTINE IS CALLED '
-        write ( 10 , '(a)' ) 'THE ECHO FOR THE INPUT ARGUMENTS IS PRESENTED BELOW '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT PRESSURE IS    = ', p       , ' PSIA '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT PRESSURE IS    = ', p_mpa   , ' MPA '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT TEMPERATURE IS = ', t       , ' DEG F '
-        write ( 10 , '(a, g14.6, a)') 'THE INPUT TEMPERATURE IS = ', t_c     , ' DEG C '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a)' ) 'THE CALCULATED PARAMETERS ARE PRESENTED BELOW '
-        write ( 10 , '(a)' ) '   '
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED SATURATION TEMPERATURE = ', tsat, ' DEG F'
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED DENSITY                = ', rho,  ' LBM/FT**3 '
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED ENTHALPY               = ', h,    ' BTU/LBM'
-        write ( 10 , '(a, g14.6, a)') 'THE CALCULATED SPECIFIC HEAT          = ', cp,   ' BTU/(LBM-DEG F) '
-        write ( 10 , '(a)' ) '   '
-
-
-    end subroutine vapor
 
 
     subroutine vap_vol ( p, tsat, t, v, rho )
@@ -939,11 +705,6 @@ module mod_thermo
 
 
 
-
-
-
 end module mod_thermo
-
-
 
 
