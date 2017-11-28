@@ -701,7 +701,186 @@ module mod_thermo
         h = h_si * 0.4299D+0
 
 
-       end subroutine vap_enth
+    end subroutine vap_enth
+
+    FUNCTION mu0(tau)
+
+        IMPLICIT NONE
+        !
+        !> Constant coefficients "I"
+        !
+        INTEGER(KIND=4), PARAMETER, DIMENSION(1:4) :: I = &
+            (/ 0, 1, 2, 3 /)
+        !
+        !> Constant coefficients "H"
+        !
+        REAL(KIND=8), PARAMETER, DIMENSION(1:4) :: H = &
+            (/ 1.67752, 2.20462, 0.6366564, -0.241605 /)
+        !
+        ! Arguments
+        !
+        REAL(KIND=8), INTENT(IN) :: tau
+        REAL(KIND=8) :: mu0
+        !
+        ! Compute the viscosity in the dilute-gas limit.
+        !
+        mu0 = 100.0D+00/(sqrt(tau)*SUM(H*(tau**I)))
+
+    END FUNCTION mu0
+    !-------------------------------------------------------------------------
+    !
+    !> This function computes the contribution to viscosity due to finite
+    !> density.
+    !
+    !> @param[in] del Dimensionless density parameter
+    !> @param[in] tau Dimensionless temperature parameter
+    !
+    !> @return The contribution to viscosity due to finite density.
+    !
+    !-------------------------------------------------------------------------
+    FUNCTION mu1(del, tau)
+
+        IMPLICIT NONE
+        !
+        !> Constant coefficients "H"
+        !
+        REAL(KIND=8), DIMENSION(1:6,1:7) :: H
+        !
+        ! Arguments
+        !
+        REAL(KIND=8), INTENT(IN) :: del, tau
+        REAL(KIND=8) :: mu1
+        !
+        ! Variables
+        !
+        INTEGER(KIND=4) :: i, j
+        REAL(KIND=8) :: sum, tau1
+        !
+        ! Compute the contribution to viscosity due to finite density
+        !
+        sum  = 0.0D+0
+        H(1,:) = (/ 5.20094D-01, 2.22531D-01, -2.81378D-01, 1.61913D-01, -3.25372D-02, 0.0D+00, 0.0D+00  /)
+        H(2,:) = (/ 8.50895D-02, 9.99115D-01, -9.06851D-01, 2.57399D-01, 0.0D+00, 0.0D+00, 0.0D+00       /)
+        H(3,:) = (/ -1.08374D+00, 1.88797D+00, -7.72479D-01, 0.0D+00, 0.0D+00, 0.0D+00, 0.0D+00          /)
+        H(4,:) = (/ -2.89555D-01, 1.26613D+00, -4.89837D-01, 0.0D+00, 6.98452D-02, 0.0D+00, -4.35673D-03 /)
+        H(5,:) = (/ 0.0D+00, 0.0D+00, -2.57040D-01, 0.0D+00, 0.0D+00, 8.72102D-03, 0.0D+00               /)
+        H(6,:) = (/ 0.0D+00, 1.20573D-01, 0.0D+00, 0.0D+00, 0.0D+00, 0.0D+00, -5.93264D-04               /)
+
+        DO i = 1, 6
+            tau1 = (tau-1.0D+0)**(i-1)
+            DO j = 1, 7
+                IF (H(i,j) == 0.0D+0) CYCLE
+                sum = sum + H(i,j)*tau1*((del-1.0D+0)**(j-1))
+            END DO
+        END DO
+
+        mu1 = EXP(del*sum)
+
+    END FUNCTION mu1
+    !-------------------------------------------------------------------------
+    !
+    !> This function computes the viscosity as a function of density and
+    !> temperature
+    !
+    !> @param[in] density     The steam density (Kg/m3)
+    !> @param[in] temperature The steam temperature (K)
+    !
+    !> @return The viscosity in [Pa.sec]
+    !
+    !-------------------------------------------------------------------------
+    FUNCTION viscosity( t, p )
+
+        IMPLICIT NONE
+        !
+        !> Star viscosity for the computation of viscosity(density,temperature)
+        !> in [Pa.sec]
+        !
+        REAL(KIND=8), PARAMETER :: VISCOSITY_MUSTAR = 1.0D-06
+        !
+        ! Arguments
+        !
+        REAL(KIND=8), INTENT(IN) :: t, p
+        REAL(KIND=8) :: viscosity
+        !
+        ! Variables
+        !
+        REAL(KIND=8) :: del, tau
+
+        real ( kind = 8 ) :: tkel
+        real ( kind = 8 ) :: psat
+        real ( kind = 8 ) :: rho
+        real ( kind = 8 ) :: rho_kgm3
+
+
+!       Convert input temperature (deg F) to Kelvin
+        tkel = (5.0D+0/9.0D+0)*( t + 459.67D+0 )
+
+!       Following code used to calculate the density
+        call p_sat ( t, psat )
+        call liq_dens ( psat, p, t, rho )
+
+!       Convert density from lb/ft**3 to kg/m**3
+        rho_kgm3 = rho * 16.0184634D+0
+
+        !
+        ! Compute the viscosity
+        !
+        del = rho_kgm3 / 322.0D+00
+        tau = 647.096D+00 / tkel
+        viscosity = VISCOSITY_MUSTAR*mu0(tau)*mu1(del,tau)
+
+!       Convert from Pa*sec to lb/(ft-sec)
+        viscosity = viscosity * 0.672D+0
+
+
+    END FUNCTION viscosity
+
+
+    subroutine surtension ( t, sigma )
+! -------------------------------------------------------------------------- 80
+!
+! Discussion:
+!   This subroutine calculates liquid water surface tension as a function
+!   of temperature
+!
+! Arguments:
+!
+!       t,  input,     real ( kind = 8 ), this is the temperature of the coolant
+!                                         units: deg F
+!
+!   sigma, output,     real ( kind = 8 ), the calculated surface tension of the coolant
+!                                         units: lb/sec**2
+!
+!
+!
+        implicit none
+
+        real ( kind = 8 ), intent ( in ) :: t
+        real ( kind = 8 ), intent ( inout ) :: sigma
+
+
+!       Local variables
+        real ( kind = 8 ) :: tkel
+        real ( kind = 8 ) :: tc = 647.15D+0
+        real ( kind = 8 ) :: B = 235.8E-03
+        real ( kind = 8 ) :: b2 = -0.625D+0
+        real ( kind = 8 ) :: mu = 1.256D+0
+
+!       Convert input temperature to K from deg F
+        tkel = (5.0D+0/9.0D+0)*(t + 459.67D+0)
+
+!       Calculate surface tension
+        sigma = B * ((tc-tkel)/tc)**mu * (1.0D+0 + b2*((tc - tkel)/tc))
+
+!       Convert the surface tension from N/m to lb/sec**2
+        sigma = sigma * 2.205D+0
+
+
+    end subroutine surtension
+
+
+
+
 
 
 
