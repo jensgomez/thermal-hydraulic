@@ -8,7 +8,8 @@ module mod_coolant
 
 
     subroutine coolant ( mdot, qp, tin, pin, nrods, l, lstep, nassemb, nshape )
-! ************************************************************************** 80
+
+! ************************************************************************** 80
 !
 ! Discussion:
 !   This subroutine contains all the input parameters needed to calculate
@@ -78,6 +79,11 @@ module mod_coolant
         real    ( kind = 8 ) :: dh
         real    ( kind = 8 ) :: x
         integer ( kind = 4 ) :: i
+        real    ( kind = 8 ) :: s
+        real    ( kind = 8 ) :: area
+        integer ( kind = 4 ) :: opt
+        real    ( kind = 8 ) :: void
+        real    ( kind = 8 ) :: mdotchannel
 
         h(1:lstep) = 0.0D+0
 
@@ -133,10 +139,27 @@ module mod_coolant
             call quality ( tin, pin, h(i), x )
 
 
+!           Following area value from Todreas and Kazimi Appendix K
+!           Assembly flow area for BWR-5 = 9.718E-03 m**2 =
+            area = 0.1046D+0
+
+!           Calculate the mass flow rate into the channel in lb/hr
+            mdotchannel = mdot/(nassemb)
+            write(*,*) mdotchannel
+
+!           Opt = 1 for CISE slip correlation
+            opt = 1
+            call slip ( x, tin, pin, mdotchannel , area, opt, s, void )
+
+
             write ( 10, '(a, g14.6, a)' ) ' THE AXIAL ELEVATION             = ', dzft*i , ' FT '
             write ( 10, '(a, g14.6, a)' ) ' THE CALCULATED ENTHALPY         = ', h(i)   , ' BTU/LBM'
             write ( 10, '(a, g14.6, a)' ) ' THE CALCULATED QUALITY          = ', x*100.0D+0 , ' %'
+            write ( 10, '(a, g14.6, a)' ) ' THE CALCULATED SLIP FACTOR      = ', s
+            write ( 10, '(a, g14.6, a)' ) ' THE CALCULATED VOID FRACTION    = ', void
             write ( 10, '(a)' ) ' '
+
+
 
         end do
 
@@ -223,7 +246,7 @@ module mod_coolant
 
 
 
-    subroutine quality ( t, p, h , x )
+    subroutine quality ( t, p, h, x )
 
 ! ************************************************************************** 80
 !
@@ -323,6 +346,136 @@ module mod_coolant
 
 
     end subroutine quality
+
+
+
+    subroutine slip ( x, t, p, mdot, area, opt, s, void )
+! ************************************************************************** 80
+!
+! Discussion:
+!   This subroutine is created to calculate the slip factor for use in the
+!   calculation of the void fraction
+!
+! Arguments:
+!
+!       x, input,     real ( kind = 8 ), this is the quality of the coolant
+!                                        units: dimensionless
+!
+!
+!       t, input,     real ( kind = 8 ), this is the temperature of the coolant
+!                                        units: deg F
+!
+!
+!       p, input,     real ( kind = 8 ), this is the pressure of the coolant
+!                                        units: psia
+!
+!
+!    mdot, input,     real ( kind = 8 ), the mass flow rate
+!                                        units: lb/hr
+!
+!
+!    area, input,     real ( kind = 8 ), the flow area
+!                                        units: ft**2
+!
+!
+!     opt, input,   integer ( kind = 4), user option to select which slip correlation
+!                                        to use
+!
+!
+!       s, output,     real ( kind = 8 ), this is the calculated slip factor
+!                                         units: dimensionless
+!
+!    void, output,     real ( kind = 8 ), the void fraction
+!                                         units: dimensionless
+!
+!
+
+        implicit none
+
+
+!       Input arguments
+        real    ( kind = 8 ) :: x
+        real    ( kind = 8 ) :: t
+        real    ( kind = 8 ) :: p
+        real    ( kind = 8 ) :: mdot
+        real    ( kind = 8 ) :: area
+        integer ( kind = 4 ) :: opt
+        real    ( kind = 8 ) :: s
+        real    ( kind = 8 ) :: void
+
+
+!       Local variables
+        real ( kind = 8 ) :: plocal
+        real ( kind = 8 ) :: rho_l
+        real ( kind = 8 ) :: rho_v
+        real ( kind = 8 ) :: psat
+        real ( kind = 8 ) :: tsat
+        real ( kind = 8 ) :: d
+        real ( kind = 8 ) :: v
+        real ( kind = 8 ) :: sigma
+        real ( kind = 8 ) :: rey
+        real ( kind = 8 ) :: web
+        real ( kind = 8 ) :: g
+        real ( kind = 8 ) :: mu
+        real ( kind = 8 ) :: e1
+        real ( kind = 8 ) :: e2
+        real ( kind = 8 ) :: beta
+        real ( kind = 8 ) :: y
+        real ( kind = 8 ), parameter :: pi = 4.0D+0*atan(1.0D+0)
+
+!       Calculate the liquid and vapor density
+        call p_sat ( t, psat )
+        call liq_dens ( psat, p, t, rho_l )
+
+        call t_sat ( p, tsat )
+        call vap_vol ( p, tsat, t, v, rho_v )
+
+!       Calculate the liquid surface tension
+        call surtension ( t , sigma )
+
+!       Calculate flow diameter
+        d = sqrt(4.0D+0*area/pi)
+
+!       Calculate the viscosity
+        mu = viscosity ( t, p )
+
+
+!       If the opt parameter = 1, implement CISE correlation
+        if ( opt == 1 ) then
+
+!           Calculate mass flux (lb/sec**ft**2)
+            g = mdot/(area*3600.0D+0)
+
+!           Calculate the Reynolds number
+            rey = g*d/mu
+
+!           Calculate the Webber number
+            web = d*g**2/(rho_l*sigma)
+
+!           CISE correlation parameters below
+            e1 = 1.578D+0*rey**(-0.19D+0)*(rho_l/rho_v)**(0.22D+0)
+
+            e2 = 0.0273*web*rey**(-0.51D+0)* &
+            (rho_l/rho_v)**(-0.08D+0)
+
+            beta = rho_l*x/(rho_l*x + rho_v*(1.0D+0 - x))
+
+            y = beta/(1.0D+0 - beta)
+
+            s = 1.0D+0 + e1*sqrt(y/(1.0D+0+y*e2) - y*e2)
+
+!       Implement Chisholm correlation
+        else if ( opt == 2 ) then
+
+            s = sqrt ( 1.0D+0 - x*( 1.0D+0 - rho_l/rho_v ))
+
+        end if
+
+        void = 1.0D+0/(1.0D+0 + (s*((1.0D+0-x)/x)*(rho_v/rho_l)))
+
+
+    end subroutine slip
+
 
 
 
